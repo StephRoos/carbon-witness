@@ -31,7 +31,7 @@
 
     // --- Graphe 1 : CO₂ atmosphérique ---
 
-    function dessinerCo2(data) {
+    function dessinerCo2(data, pointActif = null) {
       const ctx = document.getElementById('c1').getContext('2d')
 
       ctx.fillStyle = '#1a1a2e'
@@ -94,10 +94,12 @@
       }
       ctx.stroke()
 
-      ctx.fillStyle = '#f97316'
       for (let i = 0; i < data.length; i++) {
+        const estActif = pointActif && data[i].year === pointActif.year
+        ctx.fillStyle = estActif ? '#fff' : '#f97316'  // blanc si survolé, orange sinon
+        const rayon = estActif ? 6 : 3                 // plus grand si survolé
         ctx.beginPath()
-        ctx.arc(yearToX(data[i].year), co2ToY(data[i].co2), 3, 0, Math.PI * 2)
+        ctx.arc(yearToX(data[i].year), co2ToY(data[i].co2), rayon, 0, Math.PI * 2)
         ctx.fill()
       }
     }
@@ -210,7 +212,7 @@
           pointSurvole = co2Data[i]
         }
       }
-      dessinerCo2(co2Data)   // redessine tout proprement
+      dessinerCo2(co2Data, pointSurvole)   // passe le point survolé pour le surligner
       if (pointSurvole) {    // null est falsy — rien ne s'affiche si pas de point proche
         const ctx = document.getElementById('c1').getContext('2d')
         const x = yearToX(pointSurvole.year)
