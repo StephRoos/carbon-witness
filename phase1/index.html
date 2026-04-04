@@ -91,6 +91,25 @@
       ctx.font = '10px monospace'
       ctx.fillText('Hansen : risque climatique significatif', yearToX(1960) + 5, co2ToY(350) - 4)
 
+      // Événements historiques
+      const evenements = [
+        { year: 1973, label: 'Choc pétrolier', labelY: 65 },
+        { year: 1992, label: 'Sommet Rio',      labelY: 65 },
+        { year: 2015, label: 'Accord de Paris', labelY: 65 },
+        { year: 2020, label: 'COVID',           labelY: 80 },
+      ]
+      ctx.strokeStyle = '#444'
+      ctx.fillStyle = '#666'
+      ctx.font = '10px monospace'
+      for (let i = 0; i < evenements.length; i++) {
+        const x = yearToX(evenements[i].year)
+        ctx.beginPath()
+        ctx.moveTo(x, 50)
+        ctx.lineTo(x, 350)
+        ctx.stroke()
+        ctx.fillText(evenements[i].label, x + 4, evenements[i].labelY)
+      }
+
       ctx.strokeStyle = '#f97316'
       ctx.lineWidth = 2
       ctx.beginPath()
