@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Carbon Witness</title>
+  <style>
+    body { background: #0a0a0f; margin: 0; display: flex;
+           flex-direction: column; align-items: center;
+           padding: 40px 0; gap: 40px; }
+    canvas { border: 1px solid #222; }
+  </style>
+</head>
+<body>
+  <canvas id="c1" width="800" height="400"></canvas>
+  <canvas id="c2" width="800" height="400"></canvas>
+  <script>
+
+    // --- Fonctions de mapping partagées ---
+
+    function yearToX(year) {
+      return 50 + ((year - 1959) / (2024 - 1959)) * 700
+    }
+
+    function co2ToY(co2) {
+      return 350 - ((co2 - 315) / (430 - 315)) * 300
+    }
+
+    function gtToY(gt) {
+      return 350 - ((gt - 0) / (45 - 0)) * 300
+    }
+
+    // --- Graphe 1 : CO₂ atmosphérique ---
+
+    function dessinerCo2(data) {
+      const ctx = document.getElementById('c1').getContext('2d')
+
+      ctx.fillStyle = '#1a1a2e'
+      ctx.fillRect(0, 0, 800, 400)
+
+      ctx.fillStyle = '#ccc'
+      ctx.font = 'bold 14px monospace'
+      ctx.fillText('CO₂ atmosphérique — Mauna Loa (ppm)', 50, 30)
+
+      ctx.strokeStyle = '#2a2a3e'
+      ctx.lineWidth = 1
+      const yTicks = [320, 340, 360, 380, 400, 420]
+      for (let i = 0; i < yTicks.length; i++) {
+        const y = co2ToY(yTicks[i])
+        ctx.beginPath()
+        ctx.moveTo(50, y)
+        ctx.lineTo(750, y)
+        ctx.stroke()
+      }
+
+      ctx.strokeStyle = '#444'
+      ctx.fillStyle = '#888'
+      ctx.font = '11px monospace'
+      const xTicks = [1960, 1970, 1980, 1990, 2000, 2010, 2020]
+      for (let i = 0; i < xTicks.length; i++) {
+        const x = yearToX(xTicks[i])
+        ctx.beginPath()
+        ctx.moveTo(x, 355)
+        ctx.lineTo(x, 365)
+        ctx.stroke()
+        ctx.fillText(xTicks[i], x - 15, 380)
+      }
+
+      for (let i = 0; i < yTicks.length; i++) {
+        const y = co2ToY(yTicks[i])
+        ctx.beginPath()
+        ctx.moveTo(40, y)
+        ctx.lineTo(50, y)
+        ctx.stroke()
+        ctx.fillText(yTicks[i], 5, y + 4)
+      }
+
+      ctx.strokeStyle = '#ef4444'
+      ctx.lineWidth = 1
+      ctx.setLineDash([6, 3])
+      ctx.beginPath()
+      ctx.moveTo(50, co2ToY(350))
+      ctx.lineTo(750, co2ToY(350))
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = '#ef4444'
+      ctx.fillText('350 ppm — seuil sûr', 755, co2ToY(350) + 4)
+
+      ctx.strokeStyle = '#f97316'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(yearToX(data[0].year), co2ToY(data[0].co2))
+      for (let i = 1; i < data.length; i++) {
+        ctx.lineTo(yearToX(data[i].year), co2ToY(data[i].co2))
+      }
+      ctx.stroke()
+
+      ctx.fillStyle = '#f97316'
+      for (let i = 0; i < data.length; i++) {
+        ctx.beginPath()
+        ctx.arc(yearToX(data[i].year), co2ToY(data[i].co2), 3, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+
+    // --- Graphe 2 : émissions mondiales ---
+
+    function dessinerEmissions(data) {
+      const ctx = document.getElementById('c2').getContext('2d')
+
+      ctx.fillStyle = '#1a1a2e'
+      ctx.fillRect(0, 0, 800, 400)
+
+      ctx.fillStyle = '#ccc'
+      ctx.font = 'bold 14px monospace'
+      ctx.fillText('Émissions mondiales CO₂ — fossiles (GtCO₂/an)', 50, 30)
+
+      ctx.strokeStyle = '#2a2a3e'
+      ctx.lineWidth = 1
+      const yTicks = [0, 10, 20, 30, 40]
+      for (let i = 0; i < yTicks.length; i++) {
+        const y = gtToY(yTicks[i])
+        ctx.beginPath()
+        ctx.moveTo(50, y)
+        ctx.lineTo(750, y)
+        ctx.stroke()
+      }
+
+      ctx.strokeStyle = '#444'
+      ctx.fillStyle = '#888'
+      ctx.font = '11px monospace'
+      const xTicks = [1960, 1970, 1980, 1990, 2000, 2010, 2020]
+      for (let i = 0; i < xTicks.length; i++) {
+        const x = yearToX(xTicks[i])
+        ctx.beginPath()
+        ctx.moveTo(x, 355)
+        ctx.lineTo(x, 365)
+        ctx.stroke()
+        ctx.fillText(xTicks[i], x - 15, 380)
+      }
+
+      for (let i = 0; i < yTicks.length; i++) {
+        const y = gtToY(yTicks[i])
+        ctx.beginPath()
+        ctx.moveTo(40, y)
+        ctx.lineTo(50, y)
+        ctx.stroke()
+        ctx.fillText(yTicks[i], 10, y + 4)
+      }
+
+      const pente = (17.5 - 35.4) / (2030 - 2015)
+      ctx.strokeStyle = '#ef4444'
+      ctx.lineWidth = 1
+      ctx.setLineDash([6, 3])
+      ctx.beginPath()
+      ctx.moveTo(yearToX(2015), gtToY(35.4))
+      ctx.lineTo(yearToX(2030), gtToY(35.4 + pente * (2030 - 2015)))
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = '#ef4444'
+      const label = 'Trajectoire Paris +1.5°C'
+      const labelWidth = ctx.measureText(label).width   // largeur du texte en pixels
+      ctx.fillText(label, 750 - labelWidth, gtToY(35.4 + pente * (2021 - 2015)) - 10)
+
+      ctx.strokeStyle = '#f97316'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(yearToX(data[0].year), gtToY(data[0].gt))
+      for (let i = 1; i < data.length; i++) {
+        ctx.lineTo(yearToX(data[i].year), gtToY(data[i].gt))
+      }
+      ctx.stroke()
+    }
+
+    // --- Chargement des données ---
+
+    fetch('co2.json')
+      .then(r => r.json())
+      .then(data => dessinerCo2(data))
+
+    fetch('emissions.json')
+      .then(r => r.json())
+      .then(data => dessinerEmissions(data))
+
+  </script>
+</body>
+</html>
