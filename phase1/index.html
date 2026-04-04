@@ -106,7 +106,7 @@
 
     // --- Graphe 2 : émissions mondiales ---
 
-    function dessinerEmissions(data) {
+    function dessinerEmissions(data, pointActif = null) {
       const ctx = document.getElementById('c2').getContext('2d')
 
       ctx.fillStyle = '#1a1a2e'
@@ -171,6 +171,15 @@
         ctx.lineTo(yearToX(data[i].year), gtToY(data[i].gt))
       }
       ctx.stroke()
+
+      for (let i = 0; i < data.length; i++) {
+        const estActif = pointActif && data[i].year === pointActif.year
+        ctx.fillStyle = estActif ? '#fff' : '#f97316'
+        const rayon = estActif ? 6 : 3
+        ctx.beginPath()
+        ctx.arc(yearToX(data[i].year), gtToY(data[i].gt), rayon, 0, Math.PI * 2)
+        ctx.fill()
+      }
     }
 
     // --- Détection de proximité ---
@@ -236,7 +245,7 @@
           pointSurvole = emissionsData[i]
         }
       }
-      dessinerEmissions(emissionsData)
+      dessinerEmissions(emissionsData, pointSurvole)
       if (pointSurvole) {
         const ctx = document.getElementById('c2').getContext('2d')
         const x = yearToX(pointSurvole.year)
