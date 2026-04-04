@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Carbon Witness — Phase 1</title>
+  <style>
+    body { background: #0a0a0f; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    canvas { border: 1px solid #222; }
+  </style>
+</head>
+<body>
+  <canvas id="c" width="800" height="400"></canvas>
+  <script>
+    const canvas = document.getElementById('c')
+    const ctx = canvas.getContext('2d')
+
+    // convertir une année en position x
+    function yearToX(year) {
+        const minYear = 1959
+        const maxYear = 2024
+        return 50 + ((year - minYear) / (maxYear - minYear)) * 700
+    }
+
+    // convertir une concentration en CO2 en position y
+    function co2ToY(co2) {
+        const minCo2 = 315
+        const maxCo2 = 430
+        return 350 - ((co2 - minCo2) / (maxCo2 - minCo2)) * 300
+    }
+
+    // tout le dessin est dans cette fonction, appelée quand les données sont prêtes
+    function dessiner(data) {
+
+        // fond
+        ctx.fillStyle = '#1a1a2e'
+        ctx.fillRect(0, 0, 800, 400)
+
+        // Titre
+        ctx.fillStyle = '#ccc'
+        ctx.font = 'bold 14px monospace'
+        ctx.fillText('CO₂ atmosphérique — Mauna Loa (ppm)', 50, 30)
+
+        // Lignes de grille horizontales
+        ctx.strokeStyle = '#2a2a3e'
+        ctx.lineWidth = 1
+        const yTicks = [320, 340, 360, 380, 400, 420]
+        for (let i = 0; i < yTicks.length; i++) {
+            const y = co2ToY(yTicks[i])
+            ctx.beginPath()
+            ctx.moveTo(50, y)
+            ctx.lineTo(750, y)
+            ctx.stroke()
+        }
+
+        // Axe X : marques tous les 10 ans
+        ctx.strokeStyle = '#444'
+        ctx.fillStyle = '#888'
+        ctx.font = '11px monospace'
+        const xTicks = [1960, 1970, 1980, 1990, 2000, 2010, 2020]
+        for (let i = 0; i < xTicks.length; i++) {
+            const x = yearToX(xTicks[i])
+            ctx.beginPath()
+            ctx.moveTo(x, 355)
+            ctx.lineTo(x, 365)
+            ctx.stroke()
+            ctx.fillText(xTicks[i], x - 15, 380)
+        }
+
+        // Axe Y : marques et étiquettes
+        for (let i = 0; i < yTicks.length; i++) {
+            const y = co2ToY(yTicks[i])
+            ctx.beginPath()
+            ctx.moveTo(40, y)
+            ctx.lineTo(50, y)
+            ctx.stroke()
+            ctx.fillText(yTicks[i], 5, y + 4)
+        }
+
+        // Seuil 350 ppm — limite "sûre" (Hansen, 1988)
+        ctx.strokeStyle = '#ef4444'
+        ctx.lineWidth = 1
+        ctx.setLineDash([6, 3])
+        ctx.beginPath()
+        ctx.moveTo(50, co2ToY(350))
+        ctx.lineTo(750, co2ToY(350))
+        ctx.stroke()
+        ctx.setLineDash([])
+        ctx.fillStyle = '#ef4444'
+        ctx.fillText('350 ppm — seuil sûr', 755, co2ToY(350) + 4)
+
+        // Courbe CO₂
+        ctx.strokeStyle = '#f97316'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(yearToX(data[0].year), co2ToY(data[0].co2))
+        for (let i = 1; i < data.length; i++) {
+            ctx.lineTo(yearToX(data[i].year), co2ToY(data[i].co2))
+        }
+        ctx.stroke()
+
+        // Points
+        ctx.fillStyle = '#f97316'
+        for (let i = 0; i < data.length; i++) {
+            ctx.beginPath()
+            ctx.arc(yearToX(data[i].year), co2ToY(data[i].co2), 3, 0, Math.PI * 2)
+            ctx.fill()
+        }
+    }
+
+    // chargement des données puis dessin
+    fetch('co2.json')
+        .then(response => response.json())  // convertit la réponse en tableau JS
+        .then(data => {                     // data = tableau prêt à l'emploi
+            dessiner(data)
+        })
+
+  </script>
+</body>
+</html>
