@@ -83,7 +83,13 @@
       ctx.stroke()
       ctx.setLineDash([])
       ctx.fillStyle = '#ef4444'
-      ctx.fillText('350 ppm — seuil sûr', 755, co2ToY(350) + 4)
+      const labelSeuil = '350 ppm — seuil sûr'
+      ctx.fillText(labelSeuil, 750 - ctx.measureText(labelSeuil).width, co2ToY(350) + 14)
+
+      // Annotation — franchissement du seuil
+      ctx.fillText('↑ franchi ~1988', yearToX(1960) + 5, co2ToY(350) - 16)
+      ctx.font = '10px monospace'
+      ctx.fillText('Hansen : risque climatique significatif', yearToX(1960) + 5, co2ToY(350) - 4)
 
       ctx.strokeStyle = '#f97316'
       ctx.lineWidth = 2
@@ -155,13 +161,13 @@
       ctx.setLineDash([6, 3])
       ctx.beginPath()
       ctx.moveTo(yearToX(2015), gtToY(35.4))
-      ctx.lineTo(yearToX(2030), gtToY(35.4 + pente * (2030 - 2015)))
+      ctx.lineTo(750, gtToY(35.4 + pente * (2023 - 2015)))  // s'arrête au bord droit
       ctx.stroke()
       ctx.setLineDash([])
       ctx.fillStyle = '#ef4444'
       const label = 'Trajectoire Paris +1.5°C'
       const labelWidth = ctx.measureText(label).width   // largeur du texte en pixels
-      ctx.fillText(label, 750 - labelWidth, gtToY(20))
+      ctx.fillText(label, yearToX(2022) - labelWidth, gtToY(25))
 
       ctx.strokeStyle = '#f97316'
       ctx.lineWidth = 2
