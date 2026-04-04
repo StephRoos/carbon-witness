@@ -187,9 +187,14 @@
           dessinerCo2(co2Data)
       })
 
+    let emissionsData = []
+
     fetch('emissions.json')
       .then(r => r.json())
-      .then(data => dessinerEmissions(data))
+      .then(data => {
+        emissionsData = data
+        dessinerEmissions(emissionsData)
+      })
 
       // Récupère la position de la souris relative au canvas
   document.getElementById('c1').addEventListener('mousemove', function(event) {
@@ -213,6 +218,30 @@
         ctx.fillStyle = '#fff'
         ctx.font = '12px monospace'
         ctx.fillText(pointSurvole.year + ' — ' + pointSurvole.co2 + ' ppm', x + 8, y - 8)
+      }
+  })
+
+  document.getElementById('c2').addEventListener('mousemove', function(event) {
+      const rect = this.getBoundingClientRect()
+      const mouseX = event.clientX - rect.left
+      const mouseY = event.clientY - rect.top
+
+      let pointSurvole = null
+      for (let i = 0; i < emissionsData.length; i++) {
+        const px = yearToX(emissionsData[i].year)
+        const py = gtToY(emissionsData[i].gt)
+        if (distance(mouseX, mouseY, px, py) < 10) {
+          pointSurvole = emissionsData[i]
+        }
+      }
+      dessinerEmissions(emissionsData)
+      if (pointSurvole) {
+        const ctx = document.getElementById('c2').getContext('2d')
+        const x = yearToX(pointSurvole.year)
+        const y = gtToY(pointSurvole.gt)
+        ctx.fillStyle = '#fff'
+        ctx.font = '12px monospace'
+        ctx.fillText(pointSurvole.year + ' — ' + pointSurvole.gt + ' GtCO₂', x + 8, y - 8)
       }
   })
 
