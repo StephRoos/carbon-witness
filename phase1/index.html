@@ -188,8 +188,23 @@
       return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
     }
 
+    function dessinerLigneVerticale(canvasId, annee) {
+      if (!annee) return                              // rien à faire si pas d'année
+      const ctx = document.getElementById(canvasId).getContext('2d')
+      ctx.strokeStyle = '#555'
+      ctx.lineWidth = 1
+      ctx.setLineDash([3, 3])
+      ctx.beginPath()
+      ctx.moveTo(yearToX(annee), 50)
+      ctx.lineTo(yearToX(annee), 350)
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
+
     // --- Chargement des données ---
-    let co2Data = []   // tableau vide au départ, accessible partout
+    let co2Data = []       // tableau vide au départ, accessible partout
+    let emissionsData = []
+    let anneeActive = null // année survolée, partagée entre les deux listeners
 
     fetch('co2.json')
       .then(r => r.json())
@@ -197,8 +212,6 @@
           co2Data = data        // on remplit la variable globale
           dessinerCo2(co2Data)
       })
-
-    let emissionsData = []
 
     fetch('emissions.json')
       .then(r => r.json())
@@ -221,8 +234,12 @@
           pointSurvole = co2Data[i]
         }
       }
-      dessinerCo2(co2Data, pointSurvole)   // passe le point survolé pour le surligner
-      if (pointSurvole) {    // null est falsy — rien ne s'affiche si pas de point proche
+      anneeActive = pointSurvole ? pointSurvole.year : null  // met à jour l'état partagé
+      dessinerCo2(co2Data, pointSurvole)       // redessine c1
+      dessinerEmissions(emissionsData)         // redessine c2
+      dessinerLigneVerticale('c1', anneeActive)  // ligne par-dessus c1
+      dessinerLigneVerticale('c2', anneeActive)  // ligne par-dessus c2
+      if (pointSurvole) {
         const ctx = document.getElementById('c1').getContext('2d')
         const x = yearToX(pointSurvole.year)
         const y = co2ToY(pointSurvole.co2)
@@ -245,7 +262,11 @@
           pointSurvole = emissionsData[i]
         }
       }
-      dessinerEmissions(emissionsData, pointSurvole)
+      anneeActive = pointSurvole ? pointSurvole.year : null
+      dessinerCo2(co2Data)                     // redessine c1
+      dessinerEmissions(emissionsData, pointSurvole)  // redessine c2
+      dessinerLigneVerticale('c1', anneeActive)  // ligne par-dessus c1
+      dessinerLigneVerticale('c2', anneeActive)  // ligne par-dessus c2
       if (pointSurvole) {
         const ctx = document.getElementById('c2').getContext('2d')
         const x = yearToX(pointSurvole.year)
