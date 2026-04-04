@@ -56,11 +56,27 @@
       ctx.stroke()
     }
 
+    // Titre du graphe
+    ctx.fillStyle = '#ccc'
+    ctx.font = 'bold 14px monospace'
+    ctx.fillText('Émissions mondiales CO₂ — trajectoires 2023–2050 (GtCO₂/an)', 50, 30)
+
+    // Grille horizontale
+    ctx.strokeStyle = '#252535'
+    ctx.lineWidth = 1
+    const yTicks = [0, 10, 20, 30, 40]
+    for (let i = 0; i < yTicks.length; i++) {
+      const y = gtToY(yTicks[i])
+      ctx.beginPath()
+      ctx.moveTo(50, y)
+      ctx.lineTo(750, y)
+      ctx.stroke()
+    }
+
     // Axe Y — valeurs GtCO₂
     ctx.strokeStyle = '#444'
     ctx.fillStyle = '#888'
     ctx.font = '11px monospace'
-    const yTicks = [0, 10, 20, 30, 40]
     for (let i = 0; i < yTicks.length; i++) {
       const y = gtToY(yTicks[i])
       ctx.beginPath()
@@ -71,7 +87,7 @@
     }
 
     // Axe X — décennies
-    const xTicks = [2030, 2040, 2050]
+    const xTicks = [2023, 2030, 2040, 2050]
     for (let i = 0; i < xTicks.length; i++) {
       const x = yearToX(xTicks[i])
       ctx.beginPath()
