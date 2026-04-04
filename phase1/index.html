@@ -159,7 +159,7 @@
       ctx.fillStyle = '#ef4444'
       const label = 'Trajectoire Paris +1.5°C'
       const labelWidth = ctx.measureText(label).width   // largeur du texte en pixels
-      ctx.fillText(label, 750 - labelWidth, gtToY(35.4 + pente * (2021 - 2015)) - 10)
+      ctx.fillText(label, 750 - labelWidth, gtToY(20))
 
       ctx.strokeStyle = '#f97316'
       ctx.lineWidth = 2
@@ -171,15 +171,50 @@
       ctx.stroke()
     }
 
+    // --- Détection de proximité ---
+
+    function distance(x1, y1, x2, y2) {
+      return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+    }
+
     // --- Chargement des données ---
+    let co2Data = []   // tableau vide au départ, accessible partout
 
     fetch('co2.json')
       .then(r => r.json())
-      .then(data => dessinerCo2(data))
+      .then(data => {
+          co2Data = data        // on remplit la variable globale
+          dessinerCo2(co2Data)
+      })
 
     fetch('emissions.json')
       .then(r => r.json())
       .then(data => dessinerEmissions(data))
+
+      // Récupère la position de la souris relative au canvas
+  document.getElementById('c1').addEventListener('mousemove', function(event) {
+      const rect = this.getBoundingClientRect()
+      const mouseX = event.clientX - rect.left
+      const mouseY = event.clientY - rect.top
+
+      let pointSurvole = null
+      for (let i = 0; i < co2Data.length; i++) {
+        const px = yearToX(co2Data[i].year)
+        const py = co2ToY(co2Data[i].co2)
+        if (distance(mouseX, mouseY, px, py) < 10) {
+          pointSurvole = co2Data[i]
+        }
+      }
+      dessinerCo2(co2Data)   // redessine tout proprement
+      if (pointSurvole) {    // null est falsy — rien ne s'affiche si pas de point proche
+        const ctx = document.getElementById('c1').getContext('2d')
+        const x = yearToX(pointSurvole.year)
+        const y = co2ToY(pointSurvole.co2)
+        ctx.fillStyle = '#fff'
+        ctx.font = '12px monospace'
+        ctx.fillText(pointSurvole.year + ' — ' + pointSurvole.co2 + ' ppm', x + 8, y - 8)
+      }
+  })
 
   </script>
 </body>
