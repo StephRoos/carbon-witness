@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Carbon Witness — Scénarios</title>
+  <style>
+    body { background: #0a0a0f; margin: 0; display: flex;
+           flex-direction: column; align-items: center; padding: 40px 0; gap: 20px; }
+    canvas { border: 1px solid #222; }
+  </style>
+</head>
+<body>
+  <h1 style="color: #ccc; font-family: monospace; font-size: 18px;
+             margin: 0; letter-spacing: 2px;">CARBON WITNESS</h1>
+  <p style="color: #555; font-family: monospace; font-size: 11px; margin: 0;">
+    Émissions réelles 1990–2023 · 100 trajectoires possibles vers 2050
+  </p>
+  <canvas id="c" width="800" height="400"></canvas>
+  <script>
+    const canvas = document.getElementById('c')
+    const ctx = canvas.getContext('2d')
+
+    // X couvre 1990 → 2050 — passé et futur sur le même axe
+    function yearToX(year) {
+      return 50 + ((year - 1990) / (2050 - 1990)) * 700
+    }
+
+    // Y part de 0 — axe absolu
+    function gtToY(gt) {
+      return 350 - (gt / 45) * 300
+    }
+
+    fetch('emissions.json')
+      .then(r => r.json())
+      .then(data => dessiner(data))
+
+    function dessiner(data) {
+      // 1. fond
+      ctx.fillStyle = '#1a1a2e'
+      ctx.fillRect(0, 0, 800, 400)
+
+      // 2. titre
+      ctx.fillStyle = '#ccc'
+      ctx.font = 'bold 14px monospace'
+      ctx.fillText('Émissions mondiales CO₂ — fossiles (GtCO₂/an)', 50, 30)
+
+      // 3. grille horizontale
+      ctx.strokeStyle = '#252535'
+      ctx.lineWidth = 1
+      const yTicks = [0, 10, 20, 30, 40]
+      for (let i = 0; i < yTicks.length; i++) {
+        const y = gtToY(yTicks[i])
+        ctx.beginPath()
+        ctx.moveTo(50, y)
+        ctx.lineTo(750, y)
+        ctx.stroke()
+        ctx.fillStyle = '#888'
+        ctx.font = '11px monospace'
+        ctx.fillText(yTicks[i], 10, y + 4)
+      }
+
+      // 4. axe X
+      ctx.strokeStyle = '#444'
+      ctx.fillStyle = '#888'
+      ctx.font = '11px monospace'
+      const xTicks = [1990, 2000, 2010, 2020, 2030, 2040, 2050]
+      for (let i = 0; i < xTicks.length; i++) {
+        const x = yearToX(xTicks[i])
+        ctx.beginPath()
+        ctx.moveTo(x, 355)
+        ctx.lineTo(x, 365)
+        ctx.stroke()
+        ctx.fillText(xTicks[i], x - 15, 380)
+      }
+
+      // 5. courbe historique 1990–2023
+      const historique = data.filter(d => d.year >= 1990)  // on garde seulement à partir de 1990
+
+      ctx.strokeStyle = '#f97316'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(yearToX(historique[0].year), gtToY(historique[0].gt))
+      for (let i = 1; i < historique.length; i++) {
+        ctx.lineTo(yearToX(historique[i].year), gtToY(historique[i].gt))
+      }
+      ctx.stroke()
+
+      // 6. trajectoires futures — partent du dernier point historique
+      const depart = historique[historique.length - 1].gt  // valeur 2023
+
+      function calculerBornes(arrivee, nSimulations) {
+        const bornes = []
+        for (let year = 2023; year <= 2050; year++) {
+          const progression = (year - 2023) / (2050 - 2023)
+          const enveloppe = Math.sin(progression * Math.PI)
+          const tendance = depart + (arrivee - depart) * progression
+          const valeurs = []
+          for (let i = 0; i < nSimulations; i++) {
+            const deviation = (Math.random() - 0.5) * 8
+            valeurs.push(tendance + deviation * enveloppe + (Math.random() - 0.5) * 3 * enveloppe)
+          }
+          valeurs.sort((a, b) => a - b)  // tri croissant pour lire min[0] et max[dernière position]
+          bornes.push({ year, min: valeurs[0], max: valeurs[valeurs.length - 1], median: valeurs[Math.floor(nSimulations / 2)] })
+        }
+        return bornes
+      }
+
+      function dessinerEnveloppe(bornes, couleur) {
+        ctx.fillStyle = couleur
+        ctx.beginPath()
+        ctx.moveTo(yearToX(bornes[0].year), gtToY(bornes[0].max))
+        for (let i = 1; i < bornes.length; i++) ctx.lineTo(yearToX(bornes[i].year), gtToY(bornes[i].max))
+        for (let i = bornes.length - 1; i >= 0; i--) ctx.lineTo(yearToX(bornes[i].year), gtToY(bornes[i].min))
+        ctx.closePath()  // relie le dernier point au premier — ferme la forme
+        ctx.fill()
+
+        ctx.strokeStyle = couleur.replace('0.2', '0.9')  // médiane plus opaque
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.moveTo(yearToX(bornes[0].year), gtToY(bornes[0].median))
+        for (let i = 1; i < bornes.length; i++) ctx.lineTo(yearToX(bornes[i].year), gtToY(bornes[i].median))
+        ctx.stroke()
+      }
+
+      const scenarios = [
+        { arrivee: 5,  couleur: 'rgba(74, 222, 128, 0.2)', label: '1.5°C' },
+        { arrivee: 15, couleur: 'rgba(250, 204, 21, 0.2)',  label: '2°C' },
+        { arrivee: 35, couleur: 'rgba(239, 68, 68, 0.2)',   label: 'Statu quo' },
+      ]
+      for (let s = 0; s < scenarios.length; s++) {
+        const bornes = calculerBornes(scenarios[s].arrivee, 100)
+        dessinerEnveloppe(bornes, scenarios[s].couleur)
+        ctx.fillStyle = scenarios[s].couleur.replace('0.2', '1')
+        ctx.font = '11px monospace'
+        const labelW = ctx.measureText(scenarios[s].label).width
+        ctx.fillText(scenarios[s].label, 790 - labelW, Math.max(gtToY(scenarios[s].arrivee) - 8, 20))
+      }
+    }
+  </script>
+</body>
+</html>

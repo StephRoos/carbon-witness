@@ -36,23 +36,39 @@
       return 350 - ((gt - 0) / (40 - 0)) * 300
     }
 
-    // dessine une trajectoire — converge vers arrivee en 2050
-    function dessinerTrajectoire(depart, arrivee, couleur) {
-      const deviation = (Math.random() - 0.5) * 10  // déviation unique par courbe
+    const depart = 37  // point de départ fixe — émissions 2023
 
-      ctx.strokeStyle = couleur
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.moveTo(yearToX(2023), gtToY(depart))
-
-      for (let year = 2024; year <= 2050; year++) {
+    function calculerBornes(arrivee, nSimulations) {
+      const bornes = []
+      for (let year = 2023; year <= 2050; year++) {
         const progression = (year - 2023) / (2050 - 2023)
+        const enveloppe = Math.sin(progression * Math.PI)
         const tendance = depart + (arrivee - depart) * progression
-        const enveloppe = Math.sin(progression * Math.PI)           // 0 → 1 → 0
-        const ecart = deviation * enveloppe                         // déviation structurelle
-                    + (Math.random() - 0.5) * 4 * enveloppe        // bruit organique
-        ctx.lineTo(yearToX(year), gtToY(tendance + ecart))
+        const valeurs = []
+        for (let i = 0; i < nSimulations; i++) {
+          const deviation = (Math.random() - 0.5) * 10
+          valeurs.push(tendance + deviation * enveloppe + (Math.random() - 0.5) * 4 * enveloppe)
+        }
+        valeurs.sort((a, b) => a - b)
+        bornes.push({ year, min: valeurs[0], max: valeurs[valeurs.length - 1], median: valeurs[Math.floor(nSimulations / 2)] })
       }
+      return bornes
+    }
+
+    function dessinerEnveloppe(bornes, couleur) {
+      ctx.fillStyle = couleur
+      ctx.beginPath()
+      ctx.moveTo(yearToX(bornes[0].year), gtToY(bornes[0].max))
+      for (let i = 1; i < bornes.length; i++) ctx.lineTo(yearToX(bornes[i].year), gtToY(bornes[i].max))
+      for (let i = bornes.length - 1; i >= 0; i--) ctx.lineTo(yearToX(bornes[i].year), gtToY(bornes[i].min))
+      ctx.closePath()
+      ctx.fill()
+
+      ctx.strokeStyle = couleur.replace('0.2', '0.9')
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(yearToX(bornes[0].year), gtToY(bornes[0].median))
+      for (let i = 1; i < bornes.length; i++) ctx.lineTo(yearToX(bornes[i].year), gtToY(bornes[i].median))
       ctx.stroke()
     }
 
@@ -97,19 +113,17 @@
       ctx.fillText(xTicks[i], x - 15, 380)
     }
 
-    // Trois scénarios IPCC — 33 trajectoires chacun
+    // Trois scénarios IPCC
     const scenarios = [
-      { arrivee: 5,  couleur: 'rgba(74, 222, 128, 0.12)',  label: '1.5°C' },   // vert
-      { arrivee: 15, couleur: 'rgba(250, 204, 21, 0.12)',  label: '2°C' },     // jaune
-      { arrivee: 35, couleur: 'rgba(239, 68, 68, 0.12)',   label: 'Statu quo' }, // rouge
+      { arrivee: 5,  couleur: 'rgba(74, 222, 128, 0.2)', label: '1.5°C' },
+      { arrivee: 15, couleur: 'rgba(250, 204, 21, 0.2)',  label: '2°C' },
+      { arrivee: 35, couleur: 'rgba(239, 68, 68, 0.2)',   label: 'Statu quo' },
     ]
 
     for (let s = 0; s < scenarios.length; s++) {
-      for (let i = 0; i < 33; i++) {
-        dessinerTrajectoire(37, scenarios[s].arrivee, scenarios[s].couleur)
-      }
-      // label à droite, à hauteur de la valeur d'arrivée
-      ctx.fillStyle = scenarios[s].couleur.replace('0.12', '1')  // couleur pleine
+      const bornes = calculerBornes(scenarios[s].arrivee, 100)
+      dessinerEnveloppe(bornes, scenarios[s].couleur)
+      ctx.fillStyle = scenarios[s].couleur.replace('0.2', '1')
       ctx.font = '11px monospace'
       const labelW = ctx.measureText(scenarios[s].label).width
       ctx.fillText(scenarios[s].label, 790 - labelW, Math.max(gtToY(scenarios[s].arrivee) - 8, 20))
