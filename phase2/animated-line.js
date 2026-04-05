@@ -1,4 +1,5 @@
 let donnees
+let data           // Object.values(donnees) — calculé une seule fois dans setup()
 let ipcc
 let progression    = 0
 let pauseFrames    = 0       // 1 — pause narrative entre les deux actes
@@ -14,6 +15,7 @@ function preload() {
 function setup() {
   createCanvas(920, 400)
   colorMode(HSB, 360, 100, 100, 100)
+  data = Object.values(donnees)
 }
 
 function yearToX(year) { return 50 + ((year - 1959) / (2050 - 1959)) * 800 }
@@ -34,12 +36,12 @@ function draw() {
   textSize(10)
   text('Source : OWID/GCP (hist. 1959–2023) · GCP prél. (2024–2025) · IPCC AR6 IIASA C1/C3/C6 hors AFOLU (scén.)', 50, 46)
 
-  // grille horizontale
-  const yTicks = [0, 10, 20, 30, 40]
+  // grille horizontale — étendue jusqu'à 2050
+  const yTicks = [0, 10, 20, 30, 40, 50]
   for (let i = 0; i < yTicks.length; i++) {
     stroke(0, 0, 15)
     strokeWeight(1)
-    line(50, gtToY(yTicks[i]), 750, gtToY(yTicks[i]))
+    line(50, gtToY(yTicks[i]), yearToX(2050), gtToY(yTicks[i]))
     noStroke()
     fill(0, 0, 53)
     textSize(11)
@@ -80,7 +82,6 @@ function draw() {
   }
 
   // courbe historique animée — gradient temporel
-  const data = Object.values(donnees)
   progression = min(progression + 0.2, data.length - 1)
 
   noFill()
@@ -103,49 +104,65 @@ function draw() {
   fill(25, 90, 100, 90)
   ellipse(ptX, ptY, 8)
 
-  // 2 — année courante
-  fill(25, 90, 100, 80)
+  // 2 & 3 — année + GtCO₂ sur fond sombre constant
+  noStroke()
+  fill(240, 30, 8, 85)
+  rect(ptX + 8, ptY - 8, 58, 26, 3)
+  fill(0, 0, 95)
   textSize(11)
   textFont('monospace')
   textAlign(LEFT, CENTER)
-  text(data[idx].year, ptX + 10, ptY)
-
-  // 3 — valeur GtCO₂ courante
-  fill(0, 0, 70, 60)
+  text(data[idx].year, ptX + 12, ptY)
+  fill(0, 0, 65)
   textSize(10)
-  text(data[idx].gt.toFixed(1) + ' Gt', ptX + 10, ptY + 13)
+  text(data[idx].gt.toFixed(1) + ' Gt', ptX + 12, ptY + 13)
 
-  // scénarios futurs — pause de 60 frames après la fin de la courbe, puis démarrage
+  // scénarios futurs — pause de 60 frames après la fin de la courbe historique (2025)
   if (progression >= data.length - 1) {
     pauseFrames = min(pauseFrames + 1, 60)
   }
   if (progression >= data.length - 1 && pauseFrames >= 60) {
     if (!scenariosData) {
-      // Ancrage : décaler chaque scénario pour partir du point réel 2023
-      // (correction du biais initial entre valeurs modèles et données observées)
+      // Ancrage : décaler chaque scénario pour partir de la valeur observée 2025
       const ancre = data[data.length - 1].gt
 
+      // Interpole les données 5 ans → résolution annuelle, puis ancre sur la valeur observée
       function ancrer(points) {
-        const future = points.filter(p => p.year >= 2025)  // données 2015-2024 ignorées
+        const future = points.filter(p => p.year >= 2025)
         const delta  = ancre - future[0].median
-        return future.map((p, i) => {
-          const med = p.median + delta
-          if (i === 0) return { year: p.year, p05: ancre, p25: ancre, median: ancre, p75: ancre, p95: ancre }
-          return {
-            year:   p.year,
-            p05:    p.p05 + delta,
-            p25:    p.p25 + delta,
-            median: med,
-            p75:    p.p75 + delta,
-            p95:    p.p95 + delta,
+        const annuel = []
+        for (let j = 0; j < future.length - 1; j++) {
+          const a = future[j], b = future[j + 1]
+          const span = b.year - a.year
+          for (let k = 0; k < span; k++) {
+            const t = k / span  // interpolation linéaire entre deux points 5 ans
+            annuel.push({
+              year:   a.year + k,
+              p05:    a.p05    + (b.p05    - a.p05)    * t + delta,
+              p25:    a.p25    + (b.p25    - a.p25)    * t + delta,
+              median: a.median + (b.median - a.median) * t + delta,
+              p75:    a.p75    + (b.p75    - a.p75)    * t + delta,
+              p95:    a.p95    + (b.p95    - a.p95)    * t + delta,
+            })
           }
+        }
+        // dernier point (2050)
+        const last = future[future.length - 1]
+        annuel.push({
+          year: last.year,
+          p05: last.p05 + delta, p25: last.p25 + delta,
+          median: last.median + delta,
+          p75: last.p75 + delta, p95: last.p95 + delta,
         })
+        // forcer le premier point à la valeur observée (incertitude nulle en 2025)
+        annuel[0] = { year: 2025, p05: ancre, p25: ancre, median: ancre, p75: ancre, p95: ancre }
+        return annuel
       }
 
       scenariosData = [
-        { points: ancrer(ipcc['+1.5°C']), couleur: [120, 70, 80] },
-        { points: ancrer(ipcc['+2°C']),   couleur: [45,  80, 90] },
-        { points: ancrer(ipcc['+3°C']),   couleur: [0,   80, 90] },
+        { points: ancrer(ipcc['+1.5°C']), couleur: [210, 80, 80], dash: []       },  // bleu — solide
+        { points: ancrer(ipcc['+2°C']),   couleur: [30,  90, 90], dash: [8, 4]   },  // orange — tirets
+        { points: ancrer(ipcc['+3°C']),   couleur: [0,   85, 85], dash: [3, 3]   },  // rouge — pointillés
       ]
     }
     fadeScenarios  = min(fadeScenarios + 1 / 30, 1)  // 30 frames pour atteindre opacité pleine
@@ -174,14 +191,27 @@ function draw() {
       endShape(CLOSE)
       drawingContext.globalAlpha = 1
 
-      // médiane
+      // médiane — style de ligne propre à chaque scénario (accessibilité daltonisme)
       noFill()
       stroke(c[0], c[1], c[2], 90 * fadeScenarios)
       strokeWeight(1.5)
+      if (sc.dash.length) drawingContext.setLineDash(sc.dash)
       beginShape()
       for (let i = 0; i <= nPoints; i++) vertex(yearToX(sc.points[i].year), gtToY(sc.points[i].median))
       endShape()
+      drawingContext.setLineDash([])
 
+      // label intermédiaire (~2037) — lisible pendant l'animation, pas besoin d'attendre 2050
+      const idx37 = sc.points.findIndex(p => p.year === 2037)
+      if (idx37 >= 0 && nPoints >= idx37) {
+        noStroke()
+        fill(c[0], c[1], c[2], 70 * fadeScenarios)
+        textSize(9)
+        textAlign(LEFT, CENTER)
+        text(labels[s], yearToX(2037) + 4, gtToY(sc.points[idx37].median) - 10)
+      }
+
+      // label final à 2050
       if (anneeScenarios >= 2050) {
         noStroke()
         fill(c[0], c[1], c[2])
@@ -191,26 +221,13 @@ function draw() {
       }
     }
 
-    // 5 — gap entre +1.5°C et +3°C à 2050
+    // hint de replay une fois l'animation terminée
     if (anneeScenarios >= 2050 && fadeScenarios >= 1) {
-      const y15 = gtToY(scenariosData[0].points[scenariosData[0].points.length - 1].median)
-      const y3  = gtToY(scenariosData[2].points[scenariosData[2].points.length - 1].median)
-      const xGap = yearToX(2051) + 38
-      const gap  = scenariosData[2].points[scenariosData[2].points.length - 1].median
-                 - scenariosData[0].points[scenariosData[0].points.length - 1].median
-
-      stroke(0, 0, 45)
-      strokeWeight(1)
-      // accolade verticale simplifiée : deux tirets + ligne centrale
-      line(xGap, y15, xGap + 4, y15)
-      line(xGap, y3,  xGap + 4, y3)
-      line(xGap, y15, xGap,     y3)
+      fill(0, 0, 40, 50 + 20 * sin(frameCount * 0.04))  // pulsation douce
       noStroke()
-      fill(0, 0, 55)
-      textSize(9)
-      textAlign(LEFT, CENTER)
-      text('+' + gap.toFixed(0) + ' Gt', xGap + 6, (y15 + y3) / 2)
-      text('écart', xGap + 6, (y15 + y3) / 2 + 11)
+      textSize(10)
+      textAlign(CENTER, BASELINE)
+      text('cliquer pour relancer', width / 2, 395)
     }
 
   }
