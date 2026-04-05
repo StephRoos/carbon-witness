@@ -13,19 +13,35 @@ function preload() {
 }
 
 function setup() {
-  createCanvas(min(windowWidth - 20, 1200), 400)
+  createCanvas(min(windowWidth - 20, 1200), 500)
   colorMode(HSB, 360, 100, 100, 100)
   data = Object.values(donnees)
 }
 
 // Échelles dynamiques — s'adaptent à la taille du canvas
 function yearToX(year) { return 50 + ((year - 1959) / (2050 - 1959)) * (width - 120) }
-function gtToY(gt)      { return (height - 50) - (gt / 50) * (height - 100) }
+function gtToY(gt)      { return (height - 50) - (gt / 50) * (height - 140) }
 
 function windowResized() {
-  resizeCanvas(min(windowWidth - 20, 1200), 400)
+  resizeCanvas(min(windowWidth - 20, 1200), 500)
 }
 
+
+// Courbe historique — extraite en fonction pour pouvoir la dessiner deux fois :
+// une première fois pour que les événements se calent dessus,
+// une seconde fois PAR-DESSUS les bandes de scénarios (sinon elle disparaît sous les zones colorées)
+function dessinerCourbeHistorique() {
+  noFill()
+  for (let i = 1; i <= floor(progression); i++) {
+    const age = i / data.length                        // 0→1 : dégradé de luminosité
+    stroke(25, 90, map(age, 0, 1, 30, 100))           // HSB : orange de plus en plus vif
+    strokeWeight(2)
+    if (data[i].year >= 2024) drawingContext.setLineDash([5, 4])  // pointillés pour 2024-2025 (estimations)
+    line(yearToX(data[i-1].year), gtToY(data[i-1].gt),
+         yearToX(data[i].year),   gtToY(data[i].gt))
+    if (data[i].year >= 2024) drawingContext.setLineDash([])
+  }
+}
 
 function draw() {
   background(240, 30, 10)
@@ -39,7 +55,15 @@ function draw() {
   text('Émissions mondiales de CO₂ (GtCO₂/an)', 50, 30)
   fill(0, 0, 40)
   textSize(10)
-  text('Source : OWID/GCP (hist. 1959–2023) · GCP prél. (2024–2025) · IPCC AR6 IIASA C1/C3/C6 hors AFOLU (scén.)', 50, 44)
+  textAlign(RIGHT, BASELINE)
+  text('Sources : OWID/GCP · IPCC AR6 IIASA (C1/C3/C6)', width - 10, 44)
+  textAlign(LEFT, BASELINE)
+
+  // label axe Y
+  fill(0, 0, 45)
+  textSize(9)
+  textAlign(LEFT, BASELINE)
+  text('GtCO₂/an', 6, gtToY(50) - 8)
 
   // grille horizontale — étendue jusqu'à 2050
   const yTicks = [0, 10, 20, 30, 40, 50]
@@ -86,7 +110,7 @@ function draw() {
     // ligne du bas jusqu'au point de la courbe
     stroke(0, 0, 27)
     strokeWeight(1)
-    line(evX, 350, evX, evY)
+    line(evX, height - 50, evX, evY)
 
     // label au-dessus du point
     noStroke()
@@ -96,20 +120,11 @@ function draw() {
     text(ev.label, evX - 4, evY + ev.offset)
   }
 
-  // courbe historique animée — gradient temporel
+  // progression de l'animation
   if (!paused) progression = min(progression + 0.2, data.length - 1)
 
-  noFill()
-  for (let i = 1; i <= floor(progression); i++) {
-    const age = i / data.length
-    stroke(25, 90, map(age, 0, 1, 30, 100))
-    strokeWeight(2)
-    // 2024 et 2025 = estimations préliminaires GCP → pointillés
-    if (data[i].year >= 2024) drawingContext.setLineDash([5, 4])
-    line(yearToX(data[i-1].year), gtToY(data[i-1].gt),
-         yearToX(data[i].year),   gtToY(data[i].gt))
-    if (data[i].year >= 2024) drawingContext.setLineDash([])
-  }
+  // courbe historique — dessinée ici ET après les scénarios (pour rester au premier plan)
+  dessinerCourbeHistorique()
 
   // point lumineux à la tête — disparaît quand les scénarios prennent le relais
   const idx = floor(progression)
@@ -148,7 +163,8 @@ function draw() {
     line(sepX, 55, sepX, height - 50)
     drawingContext.setLineDash([])
     noStroke()
-    fill(0, 0, 45, 70 * sepAlpha)
+    const pulseAlpha = 70 * sepAlpha * (0.6 + 0.4 * sin(frameCount * 0.05))  // pulse doux
+    fill(0, 0, 45, pulseAlpha)
     textSize(9)
     textAlign(LEFT, BASELINE)
     text('projections →', sepX + 4, 63)
@@ -243,35 +259,93 @@ function draw() {
       }
     }
 
-    // B — hover interactif sur la courbe historique
-    if (mouseX >= yearToX(1959) && mouseX <= yearToX(2025) && mouseY >= 50 && mouseY <= height - 40) {
-      // Trouver l'année la plus proche du curseur
-      const hoverYear = round(1959 + (mouseX - 50) / 800 * (2050 - 1959))
-      const hoverIdx  = constrain(hoverYear - 1959, 0, data.length - 1)
-      const hx = yearToX(data[hoverIdx].year)
-      const hy = gtToY(data[hoverIdx].gt)
+    // Redessiner la courbe historique PAR-DESSUS les bandes de scénarios
+    dessinerCourbeHistorique()
 
-      // ligne verticale de repère
-      stroke(0, 0, 40, 40)
-      strokeWeight(1)
-      line(hx, 55, hx, height - 50)
-
-      // point sur la courbe
+    // Légende des bandes d'incertitude — en haut à droite, sous les sources
+    if (anneeScenarios >= 2050 && fadeScenarios >= 1) {
+      const lx = width - 90
       noStroke()
-      fill(25, 90, 100, 70)
-      ellipse(hx, hy, 6)
+      fill(0, 0, 50, 25)
+      rect(lx, 52, 10, 8, 1)
+      fill(0, 0, 45)
+      textSize(9)
+      textAlign(LEFT, BASELINE)
+      text('p25–p75', lx + 14, 59)
+      fill(0, 0, 50, 12)
+      rect(lx, 64, 10, 8, 1)
+      fill(0, 0, 45)
+      text('p05–p95', lx + 14, 71)
+    }
 
-      // tooltip
-      fill(240, 30, 8, 90)
-      rect(hx + 8, hy - 10, 62, 28, 3)
-      fill(0, 0, 95)
-      textSize(11)
-      textFont('monospace')
-      textAlign(LEFT, CENTER)
-      text(data[hoverIdx].year, hx + 12, hy - 1)
-      fill(0, 0, 65)
-      textSize(10)
-      text(data[hoverIdx].gt.toFixed(1) + ' Gt', hx + 12, hy + 12)
+    // Hover interactif — souris OU clavier
+    // Reset keyYear dès que la souris entre dans la zone du graphe
+    if (mouseX >= yearToX(1959) && mouseX <= yearToX(2050) && mouseY >= 50 && mouseY <= height - 40) keyYear = null
+    const activeYear = keyYear || (mouseX >= yearToX(1959) && mouseX <= yearToX(2050) && mouseY >= 50 && mouseY <= height - 40
+      ? round(1959 + (mouseX - 50) / (width - 120) * (2050 - 1959)) : null)
+    if (activeYear !== null) {
+      const hoverYear = activeYear
+
+      if (hoverYear <= 2025) {
+        // Hover sur la partie historique
+        const hoverIdx = constrain(hoverYear - 1959, 0, data.length - 1)
+        const hx = yearToX(data[hoverIdx].year)
+        const hy = gtToY(data[hoverIdx].gt)
+
+        stroke(0, 0, 40, 40)
+        strokeWeight(1)
+        line(hx, 55, hx, height - 50)
+
+        noStroke()
+        fill(25, 90, 100, 70)
+        ellipse(hx, hy, 6)
+
+        fill(240, 30, 8, 90)
+        rect(hx + 8, hy - 10, 62, 28, 3)
+        fill(0, 0, 95)
+        textSize(11)
+        textFont('monospace')
+        textAlign(LEFT, CENTER)
+        text(data[hoverIdx].year, hx + 12, hy - 1)
+        fill(0, 0, 65)
+        textSize(10)
+        text(data[hoverIdx].gt.toFixed(1) + ' Gt', hx + 12, hy + 12)
+
+      } else if (scenariosData && hoverYear >= 2026) {
+        // Hover sur la zone de scénarios — médianes des 3 scénarios
+        const hx = yearToX(hoverYear)
+        const scIdx = constrain(hoverYear - 2025, 0, scenariosData[0].points.length - 1)
+
+        stroke(0, 0, 40, 40)
+        strokeWeight(1)
+        line(hx, 55, hx, height - 50)
+
+        // Tooltip multi-scénarios
+        const tooltipW = 90
+        const tooltipH = 52
+        const tx = min(hx + 12, width - tooltipW - 10)  // ne pas déborder à droite
+        const ty = 60
+        noStroke()
+        fill(240, 30, 8, 92)
+        rect(tx, ty, tooltipW, tooltipH, 3)
+
+        fill(0, 0, 95)
+        textSize(11)
+        textFont('monospace')
+        textAlign(LEFT, CENTER)
+        text(hoverYear, tx + 6, ty + 10)
+
+        const scLabels = ['+1.5°C', '+2°C', '+3°C']
+        for (let s = 0; s < scenariosData.length; s++) {
+          const c  = scenariosData[s].couleur
+          const pt = scenariosData[s].points[scIdx]
+          fill(c[0], c[1], c[2])
+          textSize(9)
+          text(scLabels[s] + ' ' + pt.median.toFixed(1) + ' Gt', tx + 6, ty + 24 + s * 11)
+          noStroke()
+          ellipse(hx, gtToY(pt.median), 3)       // point discret sur chaque médiane
+        }
+      }
     }
 
     // hint de replay une fois l'animation terminée
@@ -286,7 +360,8 @@ function draw() {
   }
 }
 
-let paused = false
+let paused   = false
+let keyYear  = null   // année sélectionnée au clavier (null = pas de sélection)
 
 function doubleClicked() {
   progression    = 0
@@ -295,6 +370,7 @@ function doubleClicked() {
   scenariosData  = null
   fadeScenarios  = 0
   paused         = false
+  keyYear        = null
 }
 
 function keyPressed() {
@@ -303,16 +379,19 @@ function keyPressed() {
     return false  // empêcher le scroll de la page
   }
   if (keyCode === LEFT_ARROW) {
-    // reculer d'une année
     progression = max(progression - 1, 0)
     if (anneeScenarios > 2025) anneeScenarios = max(anneeScenarios - 1, 2025)
+    // mettre à jour l'année clavier pour afficher le tooltip
+    keyYear = 1959 + floor(progression)
+    if (anneeScenarios > 2025) keyYear = floor(anneeScenarios)
   }
   if (keyCode === RIGHT_ARROW) {
-    // avancer d'une année
     if (progression < data.length - 1) {
       progression = min(progression + 1, data.length - 1)
     } else if (pauseFrames >= 60) {
       anneeScenarios = min(anneeScenarios + 1, 2050)
     }
+    keyYear = 1959 + floor(progression)
+    if (progression >= data.length - 1 && anneeScenarios > 2025) keyYear = floor(anneeScenarios)
   }
 }
