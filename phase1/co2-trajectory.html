@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Carbon Witness — CO₂ projection</title>
+  <style>
+    body { background: #0a0a0f; margin: 0; display: flex;
+           flex-direction: column; align-items: center; padding: 40px 0; gap: 20px; }
+    canvas { border: 1px solid #222; }
+  </style>
+</head>
+<body>
+  <h1 style="color: #ccc; font-family: monospace; font-size: 18px;
+             margin: 0; letter-spacing: 2px;">CARBON WITNESS</h1>
+  <p style="color: #555; font-family: monospace; font-size: 11px; margin: 0;">
+    CO₂ atmosphérique — mesuré 1959–2024 · projeté 2025–2050 · seuils indicatifs IPCC AR6
+  </p>
+  <canvas id="c" width="800" height="400"></canvas>
+  <script>
+    const canvas = document.getElementById('c')
+    const ctx = canvas.getContext('2d')
+
+    function yearToX(year) {
+      return 50 + ((year - 1959) / (2050 - 1959)) * 700
+    }
+
+    function ppmToY(ppm) {
+      return 350 - ((ppm - 300) / (650 - 300)) * 300  // plage 300–650 ppm
+    }
+
+    fetch('co2.json')
+      .then(r => r.json())
+      .then(data => dessiner(data))
+
+    function dessiner(data) {
+      ctx.fillStyle = '#1a1a2e'
+      ctx.fillRect(0, 0, 800, 400)
+
+      ctx.fillStyle = '#ccc'
+      ctx.font = 'bold 14px monospace'
+      ctx.fillText('CO₂ atmosphérique — Mauna Loa (ppm)', 50, 30)
+
+      ctx.strokeStyle = '#252535'
+      ctx.lineWidth = 1
+      const yTicks = [300, 350, 400, 450, 500, 550, 600, 650]
+      for (let i = 0; i < yTicks.length; i++) {
+        const y = ppmToY(yTicks[i])
+        ctx.beginPath()
+        ctx.moveTo(50, y)
+        ctx.lineTo(750, y)
+        ctx.stroke()
+        ctx.fillStyle = '#888'
+        ctx.font = '11px monospace'
+        ctx.fillText(yTicks[i], 5, y + 4)
+      }
+
+      ctx.strokeStyle = '#444'
+      ctx.fillStyle = '#888'
+      const xTicks = [1960, 1980, 2000, 2020, 2040]
+      for (let i = 0; i < xTicks.length; i++) {
+        const x = yearToX(xTicks[i])
+        ctx.beginPath()
+        ctx.moveTo(x, 355)
+        ctx.lineTo(x, 365)
+        ctx.stroke()
+        ctx.fillText(xTicks[i], x - 15, 380)
+      }
+
+      // courbe historique
+      ctx.strokeStyle = '#f97316'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(yearToX(data[0].year), ppmToY(data[0].co2))
+      for (let i = 1; i < data.length; i++) {
+        ctx.lineTo(yearToX(data[i].year), ppmToY(data[i].co2))
+      }
+      ctx.stroke()
+
+      // projections — trois scénarios IPCC en ppm atmosphérique
+      const depart = data[data.length - 1].co2  // dernière valeur mesurée
+
+      function calculerBornes(arrivee, nSimulations) {
+        const bornes = []
+        for (let year = 2024; year <= 2050; year++) {
+          const progression = (year - 2024) / (2050 - 2024)
+          const enveloppe = Math.sin(progression * Math.PI)
+          const tendance = depart + (arrivee - depart) * progression
+          const valeurs = []
+          for (let i = 0; i < nSimulations; i++) {
+            const deviation = (Math.random() - 0.5) * 20  // incertitude en ppm
+            valeurs.push(tendance + deviation * enveloppe + (Math.random() - 0.5) * 8 * enveloppe)
+          }
+          valeurs.sort((a, b) => a - b)
+          bornes.push({ year, min: valeurs[0], max: valeurs[valeurs.length - 1], median: valeurs[Math.floor(nSimulations / 2)] })
+        }
+        return bornes
+      }
+
+      function dessinerEnveloppe(bornes, couleur) {
+        ctx.fillStyle = couleur
+        ctx.beginPath()
+        ctx.moveTo(yearToX(bornes[0].year), ppmToY(bornes[0].max))
+        for (let i = 1; i < bornes.length; i++) ctx.lineTo(yearToX(bornes[i].year), ppmToY(bornes[i].max))
+        for (let i = bornes.length - 1; i >= 0; i--) ctx.lineTo(yearToX(bornes[i].year), ppmToY(bornes[i].min))
+        ctx.closePath()
+        ctx.fill()
+
+        ctx.strokeStyle = couleur.replace('0.2', '0.9')
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.moveTo(yearToX(bornes[0].year), ppmToY(bornes[0].median))
+        for (let i = 1; i < bornes.length; i++) ctx.lineTo(yearToX(bornes[i].year), ppmToY(bornes[i].median))
+        ctx.stroke()
+      }
+
+      const scenarios = [
+        { arrivee: 435, couleur: 'rgba(74, 222, 128, 0.2)',  label: '+1.5°C — ~435 ppm' },
+        { arrivee: 480, couleur: 'rgba(250, 204, 21, 0.2)',  label: '+2°C — ~480 ppm' },
+        { arrivee: 520, couleur: 'rgba(239, 68, 68, 0.2)',   label: 'Politiques actuelles — ~520 ppm' },
+      ]
+
+      for (let s = 0; s < scenarios.length; s++) {
+        const bornes = calculerBornes(scenarios[s].arrivee, 100)
+        dessinerEnveloppe(bornes, scenarios[s].couleur)
+        ctx.fillStyle = scenarios[s].couleur.replace('0.2', '1')
+        ctx.font = '10px monospace'
+        const labelW = ctx.measureText(scenarios[s].label).width
+        ctx.fillText(scenarios[s].label, 790 - labelW, Math.max(ppmToY(scenarios[s].arrivee) - 8, 20))
+      }
+    }
+  </script>
+</body>
+</html>
