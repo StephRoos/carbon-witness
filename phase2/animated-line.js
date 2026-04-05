@@ -13,13 +13,18 @@ function preload() {
 }
 
 function setup() {
-  createCanvas(920, 400)
+  createCanvas(min(windowWidth - 20, 1200), 400)
   colorMode(HSB, 360, 100, 100, 100)
   data = Object.values(donnees)
 }
 
-function yearToX(year) { return 50 + ((year - 1959) / (2050 - 1959)) * 800 }
-function gtToY(gt)      { return 350 - (gt / 45) * 300 }
+// Échelles dynamiques — s'adaptent à la taille du canvas
+function yearToX(year) { return 50 + ((year - 1959) / (2050 - 1959)) * (width - 120) }
+function gtToY(gt)      { return (height - 50) - (gt / 50) * (height - 100) }
+
+function windowResized() {
+  resizeCanvas(min(windowWidth - 20, 1200), 400)
+}
 
 
 function draw() {
@@ -54,12 +59,12 @@ function draw() {
   for (let i = 0; i < xTicks.length; i++) {
     stroke(0, 0, 27)
     strokeWeight(1)
-    line(yearToX(xTicks[i]), 355, yearToX(xTicks[i]), 365)
+    line(yearToX(xTicks[i]), height - 45, yearToX(xTicks[i]), height - 35)
     noStroke()
     fill(0, 0, 53)
     textSize(11)
     textAlign(LEFT, BASELINE)
-    text(xTicks[i], yearToX(xTicks[i]) - 15, 380)
+    text(xTicks[i], yearToX(xTicks[i]) - 15, height - 20)
   }
 
   // événements historiques — apparaissent quand la courbe atteint leur année
@@ -92,7 +97,7 @@ function draw() {
   }
 
   // courbe historique animée — gradient temporel
-  progression = min(progression + 0.2, data.length - 1)
+  if (!paused) progression = min(progression + 0.2, data.length - 1)
 
   noFill()
   for (let i = 1; i <= floor(progression); i++) {
@@ -134,13 +139,13 @@ function draw() {
 
   // séparateur passé/futur — apparaît pendant la pause à 2025
   if (progression >= data.length - 1) {
-    pauseFrames = min(pauseFrames + 1, 60)
+    if (!paused) pauseFrames = min(pauseFrames + 1, 60)
     const sepAlpha = min(pauseFrames / 20, 1)  // fade-in sur 20 frames
     const sepX = yearToX(2025)
     stroke(0, 0, 30, 60 * sepAlpha)
     strokeWeight(1)
     drawingContext.setLineDash([3, 4])
-    line(sepX, 55, sepX, 350)
+    line(sepX, 55, sepX, height - 50)
     drawingContext.setLineDash([])
     noStroke()
     fill(0, 0, 45, 70 * sepAlpha)
@@ -192,8 +197,8 @@ function draw() {
         { points: ancrer(ipcc['+3°C']),   couleur: [0,   85, 85], dash: [3, 3]   },  // rouge — pointillés
       ]
     }
-    fadeScenarios  = min(fadeScenarios + 1 / 30, 1)  // 30 frames pour atteindre opacité pleine
-    anneeScenarios = min(anneeScenarios + 0.2, 2050)
+    if (!paused) fadeScenarios  = min(fadeScenarios + 1 / 30, 1)
+    if (!paused) anneeScenarios = min(anneeScenarios + 0.2, 2050)
     const nPoints  = min(floor(anneeScenarios - 2025), scenariosData[0].points.length - 1)
 
     const labels = ['+1.5°C', '+2°C', '+3°C']
@@ -239,7 +244,7 @@ function draw() {
     }
 
     // B — hover interactif sur la courbe historique
-    if (mouseX >= yearToX(1959) && mouseX <= yearToX(2025) && mouseY >= 50 && mouseY <= 360) {
+    if (mouseX >= yearToX(1959) && mouseX <= yearToX(2025) && mouseY >= 50 && mouseY <= height - 40) {
       // Trouver l'année la plus proche du curseur
       const hoverYear = round(1959 + (mouseX - 50) / 800 * (2050 - 1959))
       const hoverIdx  = constrain(hoverYear - 1959, 0, data.length - 1)
@@ -249,7 +254,7 @@ function draw() {
       // ligne verticale de repère
       stroke(0, 0, 40, 40)
       strokeWeight(1)
-      line(hx, 55, hx, 350)
+      line(hx, 55, hx, height - 50)
 
       // point sur la courbe
       noStroke()
@@ -271,20 +276,43 @@ function draw() {
 
     // hint de replay une fois l'animation terminée
     if (anneeScenarios >= 2050 && fadeScenarios >= 1) {
-      fill(0, 0, 40, 50 + 20 * sin(frameCount * 0.04))  // pulsation douce
+      fill(0, 0, 40, 50 + 20 * sin(frameCount * 0.04))
       noStroke()
       textSize(10)
       textAlign(CENTER, BASELINE)
-      text('cliquer pour relancer', width / 2, 395)
+      text('double-clic pour relancer · espace = pause · ←→ = année', width / 2, height - 5)
     }
 
   }
 }
 
-function mousePressed() {
+let paused = false
+
+function doubleClicked() {
   progression    = 0
   pauseFrames    = 0
   anneeScenarios = 2025
   scenariosData  = null
   fadeScenarios  = 0
+  paused         = false
+}
+
+function keyPressed() {
+  if (key === ' ') {
+    paused = !paused
+    return false  // empêcher le scroll de la page
+  }
+  if (keyCode === LEFT_ARROW) {
+    // reculer d'une année
+    progression = max(progression - 1, 0)
+    if (anneeScenarios > 2025) anneeScenarios = max(anneeScenarios - 1, 2025)
+  }
+  if (keyCode === RIGHT_ARROW) {
+    // avancer d'une année
+    if (progression < data.length - 1) {
+      progression = min(progression + 1, data.length - 1)
+    } else if (pauseFrames >= 60) {
+      anneeScenarios = min(anneeScenarios + 1, 2050)
+    }
+  }
 }
