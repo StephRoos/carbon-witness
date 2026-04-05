@@ -31,10 +31,10 @@ function draw() {
   textFont('monospace')
   textSize(14)
   textAlign(LEFT, BASELINE)
-  text('Émissions mondiales CO₂ — fossiles (GtCO₂/an)', 50, 30)
+  text('Émissions mondiales de CO₂ (GtCO₂/an)', 50, 30)
   fill(0, 0, 40)
   textSize(10)
-  text('Source : OWID/GCP (hist. 1959–2023) · GCP prél. (2024–2025) · IPCC AR6 IIASA C1/C3/C6 hors AFOLU (scén.)', 50, 46)
+  text('Source : OWID/GCP (hist. 1959–2023) · GCP prél. (2024–2025) · IPCC AR6 IIASA C1/C3/C6 hors AFOLU (scén.)', 50, 44)
 
   // grille horizontale — étendue jusqu'à 2050
   const yTicks = [0, 10, 20, 30, 40, 50]
@@ -62,23 +62,33 @@ function draw() {
     text(xTicks[i], yearToX(xTicks[i]) - 15, 380)
   }
 
-  // événements historiques
+  // événements historiques — apparaissent quand la courbe atteint leur année
   const evenements = [
-    { year: 1973, label: 'Choc pétrolier',  labelY: 65 },
-    { year: 1992, label: 'Sommet Rio',       labelY: 65 },
-    { year: 2009, label: 'Crise financière', labelY: 80 },
-    { year: 2015, label: 'Accord de Paris',  labelY: 65 },
-    { year: 2020, label: 'COVID',            labelY: 80 },
+    { year: 1973, label: 'Choc pétrolier',  offset: -8  },
+    { year: 1992, label: 'Sommet Rio',       offset: -8  },
+    { year: 2009, label: 'Crise financière', offset: -8  },
+    { year: 2015, label: 'Accord de Paris',  offset: -8  },
+    { year: 2020, label: 'COVID',            offset: -20 },
   ]
   for (let i = 0; i < evenements.length; i++) {
+    const ev   = evenements[i]
+    const evIdx = ev.year - 1959
+    if (evIdx > floor(progression)) continue
+
+    const evX  = yearToX(ev.year)
+    const evY  = gtToY(data[evIdx].gt)
+
+    // ligne du bas jusqu'au point de la courbe
     stroke(0, 0, 27)
     strokeWeight(1)
-    line(yearToX(evenements[i].year), 50, yearToX(evenements[i].year), 350)
+    line(evX, 350, evX, evY)
+
+    // label au-dessus du point
     noStroke()
-    fill(0, 0, 40)
+    fill(0, 0, 50)
     textSize(10)
     textAlign(RIGHT, BASELINE)
-    text(evenements[i].label, yearToX(evenements[i].year) - 4, evenements[i].labelY)
+    text(ev.label, evX - 4, evY + ev.offset)
   }
 
   // courbe historique animée — gradient temporel
@@ -96,30 +106,47 @@ function draw() {
     if (data[i].year >= 2024) drawingContext.setLineDash([])
   }
 
-  // point lumineux à la tête
+  // point lumineux à la tête — disparaît quand les scénarios prennent le relais
   const idx = floor(progression)
   const ptX = yearToX(data[idx].year)
   const ptY = gtToY(data[idx].gt)
-  noStroke()
-  fill(25, 90, 100, 90)
-  ellipse(ptX, ptY, 8)
+  const dotAlpha = progression < data.length - 1 ? 90 : max(90 - fadeScenarios * 90, 0)
+  if (dotAlpha > 0) {
+    noStroke()
+    fill(25, 90, 100, dotAlpha)
+    ellipse(ptX, ptY, 8)
+  }
 
-  // 2 & 3 — année + GtCO₂ sur fond sombre constant
-  noStroke()
-  fill(240, 30, 8, 85)
-  rect(ptX + 8, ptY - 8, 58, 26, 3)
-  fill(0, 0, 95)
-  textSize(11)
-  textFont('monospace')
-  textAlign(LEFT, CENTER)
-  text(data[idx].year, ptX + 12, ptY)
-  fill(0, 0, 65)
-  textSize(10)
-  text(data[idx].gt.toFixed(1) + ' Gt', ptX + 12, ptY + 13)
+  // 2 & 3 — année + GtCO₂ — masqués une fois la courbe terminée (2025)
+  if (progression < data.length - 1) {
+    noStroke()
+    fill(240, 30, 8, 85)
+    rect(ptX + 8, ptY - 8, 58, 26, 3)
+    fill(0, 0, 95)
+    textSize(11)
+    textFont('monospace')
+    textAlign(LEFT, CENTER)
+    text(data[idx].year, ptX + 12, ptY)
+    fill(0, 0, 65)
+    textSize(10)
+    text(data[idx].gt.toFixed(1) + ' Gt', ptX + 12, ptY + 13)
+  }
 
-  // scénarios futurs — pause de 60 frames après la fin de la courbe historique (2025)
+  // séparateur passé/futur — apparaît pendant la pause à 2025
   if (progression >= data.length - 1) {
     pauseFrames = min(pauseFrames + 1, 60)
+    const sepAlpha = min(pauseFrames / 20, 1)  // fade-in sur 20 frames
+    const sepX = yearToX(2025)
+    stroke(0, 0, 30, 60 * sepAlpha)
+    strokeWeight(1)
+    drawingContext.setLineDash([3, 4])
+    line(sepX, 55, sepX, 350)
+    drawingContext.setLineDash([])
+    noStroke()
+    fill(0, 0, 45, 70 * sepAlpha)
+    textSize(9)
+    textAlign(LEFT, BASELINE)
+    text('projections →', sepX + 4, 63)
   }
   if (progression >= data.length - 1 && pauseFrames >= 60) {
     if (!scenariosData) {
@@ -201,17 +228,7 @@ function draw() {
       endShape()
       drawingContext.setLineDash([])
 
-      // label intermédiaire (~2037) — lisible pendant l'animation, pas besoin d'attendre 2050
-      const idx37 = sc.points.findIndex(p => p.year === 2037)
-      if (idx37 >= 0 && nPoints >= idx37) {
-        noStroke()
-        fill(c[0], c[1], c[2], 70 * fadeScenarios)
-        textSize(9)
-        textAlign(LEFT, CENTER)
-        text(labels[s], yearToX(2037) + 4, gtToY(sc.points[idx37].median) - 10)
-      }
-
-      // label final à 2050
+      // label à 2050
       if (anneeScenarios >= 2050) {
         noStroke()
         fill(c[0], c[1], c[2])
@@ -219,6 +236,37 @@ function draw() {
         textAlign(LEFT, CENTER)
         text(labels[s], yearToX(2051), gtToY(sc.points[sc.points.length - 1].median))
       }
+    }
+
+    // B — hover interactif sur la courbe historique
+    if (mouseX >= yearToX(1959) && mouseX <= yearToX(2025) && mouseY >= 50 && mouseY <= 360) {
+      // Trouver l'année la plus proche du curseur
+      const hoverYear = round(1959 + (mouseX - 50) / 800 * (2050 - 1959))
+      const hoverIdx  = constrain(hoverYear - 1959, 0, data.length - 1)
+      const hx = yearToX(data[hoverIdx].year)
+      const hy = gtToY(data[hoverIdx].gt)
+
+      // ligne verticale de repère
+      stroke(0, 0, 40, 40)
+      strokeWeight(1)
+      line(hx, 55, hx, 350)
+
+      // point sur la courbe
+      noStroke()
+      fill(25, 90, 100, 70)
+      ellipse(hx, hy, 6)
+
+      // tooltip
+      fill(240, 30, 8, 90)
+      rect(hx + 8, hy - 10, 62, 28, 3)
+      fill(0, 0, 95)
+      textSize(11)
+      textFont('monospace')
+      textAlign(LEFT, CENTER)
+      text(data[hoverIdx].year, hx + 12, hy - 1)
+      fill(0, 0, 65)
+      textSize(10)
+      text(data[hoverIdx].gt.toFixed(1) + ' Gt', hx + 12, hy + 12)
     }
 
     // hint de replay une fois l'animation terminée
