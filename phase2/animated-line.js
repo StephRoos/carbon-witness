@@ -1,10 +1,12 @@
 let donnees
+let ipcc         // données IPCC AR6 — chargées une seule fois
 let progression = 0
-let anneeScenarios = 2023  // démarre à 2023 quand la courbe est terminée
-let scenariosData = null  // calculé une seule fois pour éviter le flickering
+let anneeScenarios = 2025  // les données IPCC AR6 démarrent en 2025
+let scenariosData = null
 
 function preload() {
   donnees = loadJSON('../phase1/emissions.json')
+  ipcc    = loadJSON('scenarios-ipcc.json')
 }
 
 function setup() {
@@ -15,22 +17,6 @@ function setup() {
 function yearToX(year) { return 50 + ((year - 1959) / (2050 - 1959)) * 800 }
 function gtToY(gt)      { return 350 - (gt / 45) * 300 }
 
-function calculerBornes(depart, arrivee, nSimulations) {
-  const bornes = []
-  for (let year = 2023; year <= 2050; year++) {
-    const progression = (year - 2023) / (2050 - 2023)
-    const enveloppe = Math.sin(progression * Math.PI)
-    const tendance = depart + (arrivee - depart) * progression
-    const valeurs = []
-    for (let i = 0; i < nSimulations; i++) {
-      const deviation = (Math.random() - 0.5) * 8
-      valeurs.push(tendance + deviation * enveloppe + (Math.random() - 0.5) * 3 * enveloppe)
-    }
-    valeurs.sort((a, b) => a - b)
-    bornes.push({ year, min: valeurs[0], max: valeurs[valeurs.length - 1], median: valeurs[Math.floor(nSimulations / 2)] })
-  }
-  return bornes
-}
 
 function draw() {
   background(240, 30, 10)
@@ -42,6 +28,9 @@ function draw() {
   textSize(14)
   textAlign(LEFT, BASELINE)
   text('Émissions mondiales CO₂ — fossiles (GtCO₂/an)', 50, 30)
+  fill(0, 0, 40)
+  textSize(10)
+  text('Source : OWID/GCP (hist. 1959–2023) · GCP prél. (2024–2025) · IPCC AR6 IIASA C1/C3/C6 hors AFOLU (scén.)', 50, 46)
 
   // grille horizontale
   const yTicks = [0, 10, 20, 30, 40]
@@ -97,8 +86,11 @@ function draw() {
     const age = i / data.length
     stroke(25, 90, map(age, 0, 1, 30, 100))
     strokeWeight(2)
+    // 2024 et 2025 = estimations préliminaires GCP → pointillés
+    if (data[i].year >= 2024) drawingContext.setLineDash([5, 4])
     line(yearToX(data[i-1].year), gtToY(data[i-1].gt),
          yearToX(data[i].year),   gtToY(data[i].gt))
+    if (data[i].year >= 2024) drawingContext.setLineDash([])
   }
 
   // point lumineux à la tête
@@ -107,51 +99,60 @@ function draw() {
   fill(25, 90, 100, 90)
   ellipse(yearToX(data[idx].year), gtToY(data[idx].gt), 8)
 
-  // trajectoire Paris — synchronisée avec l'année courante de la courbe
-  const anneeActuelle = data[floor(progression)].year
-  if (anneeActuelle >= 2015) {
-    const pente = (17.5 - 35.4) / (2030 - 2015)
-    const parisAnnee = min(anneeActuelle, 2030)
-    const parisGt    = 35.4 + pente * (parisAnnee - 2015)
-    stroke(0, 80, 90)
-    strokeWeight(1)
-    drawingContext.setLineDash([6, 3])
-    line(yearToX(2015), gtToY(35.4), yearToX(parisAnnee), gtToY(parisGt))
-    drawingContext.setLineDash([])
-    if (anneeActuelle >= 2023) {
-      noStroke()
-      fill(0, 80, 90)
-      textSize(11)
-      textAlign(RIGHT, BASELINE)
-      text('Trajectoire Paris +1.5°C', yearToX(2022), gtToY(25))
-    }
-  }
-
   // scénarios futurs — démarrent quand la courbe atteint 2023
   if (progression >= data.length - 1) {
     if (!scenariosData) {
-      const depart = data[data.length - 1].gt
+      // Ancrage : décaler chaque scénario pour partir du point réel 2023
+      // (correction du biais initial entre valeurs modèles et données observées)
+      const ancre = data[data.length - 1].gt
+
+      function ancrer(points) {
+        const delta = ancre - points[0].median
+        return points.map((p, i) => {
+          const med = p.median + delta
+          // 2025 : valeur observée, incertitude nulle.
+          // 2026+ : spreads IPCC réels (artefact d'initialisation des modèles retiré).
+          if (i === 0) return { year: p.year, p05: ancre, p25: ancre, median: ancre, p75: ancre, p95: ancre }
+          return {
+            year:   p.year,
+            p05:    p.p05    + delta,
+            p25:    p.p25    + delta,
+            median: med,
+            p75:    p.p75    + delta,
+            p95:    p.p95    + delta,
+          }
+        })
+      }
+
       scenariosData = [
-        { bornes: calculerBornes(depart, 5,  100), couleur: [120, 70, 80] },
-        { bornes: calculerBornes(depart, 15, 100), couleur: [45,  80, 90] },
-        { bornes: calculerBornes(depart, 35, 100), couleur: [0,   80, 90] },
+        { points: ancrer(ipcc['+1.5°C']), couleur: [120, 70, 80] },
+        { points: ancrer(ipcc['+2°C']),   couleur: [45,  80, 90] },
+        { points: ancrer(ipcc['+3°C']),   couleur: [0,   80, 90] },
       ]
     }
-    anneeScenarios = min(anneeScenarios + 0.2, 2050)  // même vitesse que la courbe
-    const nPoints = floor(anneeScenarios - 2023)  // années dessinées depuis 2023
+    anneeScenarios = min(anneeScenarios + 0.2, 2050)
+    // nPoints borné à la taille réelle du tableau (données démarrent en 2025)
+    const nPoints = min(floor(anneeScenarios - 2025), scenariosData[0].points.length - 1)
 
     const labels = ['+1.5°C', '+2°C', '+3°C']
     for (let s = 0; s < scenariosData.length; s++) {
       const sc = scenariosData[s]
       const c = sc.couleur
 
-      // zone remplie
-      drawingContext.globalAlpha = 0.2
+      // bande externe p05–p95 (très légère)
+      drawingContext.globalAlpha = 0.12
       fill(c[0], c[1], c[2])
       noStroke()
       beginShape()
-      for (let i = 0; i <= nPoints; i++) vertex(yearToX(sc.bornes[i].year), gtToY(sc.bornes[i].max))
-      for (let i = nPoints; i >= 0; i--) vertex(yearToX(sc.bornes[i].year), gtToY(sc.bornes[i].min))
+      for (let i = 0; i <= nPoints; i++) vertex(yearToX(sc.points[i].year), gtToY(sc.points[i].p95))
+      for (let i = nPoints; i >= 0; i--) vertex(yearToX(sc.points[i].year), gtToY(sc.points[i].p05))
+      endShape(CLOSE)
+
+      // bande intérieure p25–p75 (interquartile — "likely range" IPCC)
+      drawingContext.globalAlpha = 0.25
+      beginShape()
+      for (let i = 0; i <= nPoints; i++) vertex(yearToX(sc.points[i].year), gtToY(sc.points[i].p75))
+      for (let i = nPoints; i >= 0; i--) vertex(yearToX(sc.points[i].year), gtToY(sc.points[i].p25))
       endShape(CLOSE)
       drawingContext.globalAlpha = 1
 
@@ -160,25 +161,15 @@ function draw() {
       stroke(c[0], c[1], c[2], 90)
       strokeWeight(1.5)
       beginShape()
-      for (let i = 0; i <= nPoints; i++) vertex(yearToX(sc.bornes[i].year), gtToY(sc.bornes[i].median))
+      for (let i = 0; i <= nPoints; i++) vertex(yearToX(sc.points[i].year), gtToY(sc.points[i].median))
       endShape()
 
-      // label à la fin
       if (anneeScenarios >= 2050) {
         noStroke()
         fill(c[0], c[1], c[2])
         textSize(10)
         textAlign(LEFT, CENTER)
-        text(labels[s], yearToX(2051), gtToY(sc.bornes[sc.bornes.length - 1].median))
-      }
-
-      // labels de probabilité sous le premier scénario
-      if (s === 0 && anneeScenarios >= 2050) {
-        fill(c[0], c[1], c[2], 60)
-        textSize(9)
-        textAlign(LEFT, CENTER)
-        text('fourchette probable', yearToX(2051), gtToY(sc.bornes[sc.bornes.length - 1].median) + 14)
-        text('── médiane',          yearToX(2051), gtToY(sc.bornes[sc.bornes.length - 1].median) + 26)
+        text(labels[s], yearToX(2051), gtToY(sc.points[sc.points.length - 1].median))
       }
     }
 
@@ -194,13 +185,13 @@ function draw() {
       textSize(9)
       textAlign(CENTER, BASELINE)
       text('budget 1.5°C', yearToX(2033), 57)
-      text('épuisé ~2033', yearToX(2033), 47)
+      text('~2033 (p=50%)', yearToX(2033), 47)
     }
   }
 }
 
 function mousePressed() {
   progression = 0
-  anneeScenarios = 2023
+  anneeScenarios = 2025
   scenariosData = null
 }
