@@ -1,8 +1,10 @@
 let donnees
-let ipcc         // données IPCC AR6 — chargées une seule fois
-let progression = 0
-let anneeScenarios = 2025  // les données IPCC AR6 démarrent en 2025
-let scenariosData = null
+let ipcc
+let progression    = 0
+let pauseFrames    = 0       // 1 — pause narrative entre les deux actes
+let anneeScenarios = 2025
+let scenariosData  = null
+let fadeScenarios  = 0      // 4 — fondue d'entrée des scénarios (0→1)
 
 function preload() {
   donnees = loadJSON('../phase1/emissions.json')
@@ -95,31 +97,47 @@ function draw() {
 
   // point lumineux à la tête
   const idx = floor(progression)
+  const ptX = yearToX(data[idx].year)
+  const ptY = gtToY(data[idx].gt)
   noStroke()
   fill(25, 90, 100, 90)
-  ellipse(yearToX(data[idx].year), gtToY(data[idx].gt), 8)
+  ellipse(ptX, ptY, 8)
 
-  // scénarios futurs — démarrent quand la courbe atteint 2023
+  // 2 — année courante
+  fill(25, 90, 100, 80)
+  textSize(11)
+  textFont('monospace')
+  textAlign(LEFT, CENTER)
+  text(data[idx].year, ptX + 10, ptY)
+
+  // 3 — valeur GtCO₂ courante
+  fill(0, 0, 70, 60)
+  textSize(10)
+  text(data[idx].gt.toFixed(1) + ' Gt', ptX + 10, ptY + 13)
+
+  // scénarios futurs — pause de 60 frames après la fin de la courbe, puis démarrage
   if (progression >= data.length - 1) {
+    pauseFrames = min(pauseFrames + 1, 60)
+  }
+  if (progression >= data.length - 1 && pauseFrames >= 60) {
     if (!scenariosData) {
       // Ancrage : décaler chaque scénario pour partir du point réel 2023
       // (correction du biais initial entre valeurs modèles et données observées)
       const ancre = data[data.length - 1].gt
 
       function ancrer(points) {
-        const delta = ancre - points[0].median
-        return points.map((p, i) => {
+        const future = points.filter(p => p.year >= 2025)  // données 2015-2024 ignorées
+        const delta  = ancre - future[0].median
+        return future.map((p, i) => {
           const med = p.median + delta
-          // 2025 : valeur observée, incertitude nulle.
-          // 2026+ : spreads IPCC réels (artefact d'initialisation des modèles retiré).
           if (i === 0) return { year: p.year, p05: ancre, p25: ancre, median: ancre, p75: ancre, p95: ancre }
           return {
             year:   p.year,
-            p05:    p.p05    + delta,
-            p25:    p.p25    + delta,
+            p05:    p.p05 + delta,
+            p25:    p.p25 + delta,
             median: med,
-            p75:    p.p75    + delta,
-            p95:    p.p95    + delta,
+            p75:    p.p75 + delta,
+            p95:    p.p95 + delta,
           }
         })
       }
@@ -130,17 +148,17 @@ function draw() {
         { points: ancrer(ipcc['+3°C']),   couleur: [0,   80, 90] },
       ]
     }
+    fadeScenarios  = min(fadeScenarios + 1 / 30, 1)  // 30 frames pour atteindre opacité pleine
     anneeScenarios = min(anneeScenarios + 0.2, 2050)
-    // nPoints borné à la taille réelle du tableau (données démarrent en 2025)
-    const nPoints = min(floor(anneeScenarios - 2025), scenariosData[0].points.length - 1)
+    const nPoints  = min(floor(anneeScenarios - 2025), scenariosData[0].points.length - 1)
 
     const labels = ['+1.5°C', '+2°C', '+3°C']
     for (let s = 0; s < scenariosData.length; s++) {
       const sc = scenariosData[s]
       const c = sc.couleur
 
-      // bande externe p05–p95 (très légère)
-      drawingContext.globalAlpha = 0.12
+      // bande externe p05–p95
+      drawingContext.globalAlpha = 0.12 * fadeScenarios
       fill(c[0], c[1], c[2])
       noStroke()
       beginShape()
@@ -148,8 +166,8 @@ function draw() {
       for (let i = nPoints; i >= 0; i--) vertex(yearToX(sc.points[i].year), gtToY(sc.points[i].p05))
       endShape(CLOSE)
 
-      // bande intérieure p25–p75 (interquartile — "likely range" IPCC)
-      drawingContext.globalAlpha = 0.25
+      // bande intérieure p25–p75
+      drawingContext.globalAlpha = 0.25 * fadeScenarios
       beginShape()
       for (let i = 0; i <= nPoints; i++) vertex(yearToX(sc.points[i].year), gtToY(sc.points[i].p75))
       for (let i = nPoints; i >= 0; i--) vertex(yearToX(sc.points[i].year), gtToY(sc.points[i].p25))
@@ -158,7 +176,7 @@ function draw() {
 
       // médiane
       noFill()
-      stroke(c[0], c[1], c[2], 90)
+      stroke(c[0], c[1], c[2], 90 * fadeScenarios)
       strokeWeight(1.5)
       beginShape()
       for (let i = 0; i <= nPoints; i++) vertex(yearToX(sc.points[i].year), gtToY(sc.points[i].median))
@@ -173,25 +191,35 @@ function draw() {
       }
     }
 
-    // budget carbone 1.5°C épuisé ~2033
-    if (anneeScenarios >= 2033) {
-      stroke(0, 70, 80, 60)
+    // 5 — gap entre +1.5°C et +3°C à 2050
+    if (anneeScenarios >= 2050 && fadeScenarios >= 1) {
+      const y15 = gtToY(scenariosData[0].points[scenariosData[0].points.length - 1].median)
+      const y3  = gtToY(scenariosData[2].points[scenariosData[2].points.length - 1].median)
+      const xGap = yearToX(2051) + 38
+      const gap  = scenariosData[2].points[scenariosData[2].points.length - 1].median
+                 - scenariosData[0].points[scenariosData[0].points.length - 1].median
+
+      stroke(0, 0, 45)
       strokeWeight(1)
-      drawingContext.setLineDash([3, 3])
-      line(yearToX(2033), 60, yearToX(2033), 350)
-      drawingContext.setLineDash([])
+      // accolade verticale simplifiée : deux tirets + ligne centrale
+      line(xGap, y15, xGap + 4, y15)
+      line(xGap, y3,  xGap + 4, y3)
+      line(xGap, y15, xGap,     y3)
       noStroke()
-      fill(0, 70, 80)
+      fill(0, 0, 55)
       textSize(9)
-      textAlign(CENTER, BASELINE)
-      text('budget 1.5°C', yearToX(2033), 57)
-      text('~2033 (p=50%)', yearToX(2033), 47)
+      textAlign(LEFT, CENTER)
+      text('+' + gap.toFixed(0) + ' Gt', xGap + 6, (y15 + y3) / 2)
+      text('écart', xGap + 6, (y15 + y3) / 2 + 11)
     }
+
   }
 }
 
 function mousePressed() {
-  progression = 0
+  progression    = 0
+  pauseFrames    = 0
   anneeScenarios = 2025
-  scenariosData = null
+  scenariosData  = null
+  fadeScenarios  = 0
 }
