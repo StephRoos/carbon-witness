@@ -1,11 +1,12 @@
 class Particle {
-  constructor(x, y, ecart) {
+  constructor(x, y, ecart, emissions) {
     this.x = x          // position courante
     this.y = y
     this.px = x         // position lissée (lerp)
     this.py = y
     this.offset = random(1000)  // décalage unique dans l'espace de bruit
-    this.teinte = map(ecart, 0, 1, 120, 0)  // 120=vert (bon) → 0=rouge (mauvais)
+    this.teinte = map(ecart, 0, 1, 120, 0)      // 120=vert (bon) → 0=rouge (mauvais)
+    this.taille = map(emissions, 0, 1, 5, 40)  // 0=petit, 1=grand
   }
 
   update() {
@@ -18,7 +19,7 @@ class Particle {
 
   draw() {
     fill(this.teinte, 80, 90)
-    ellipse(this.px, this.py, 15)
+    ellipse(this.px, this.py, this.taille)
   }
 }
 
@@ -26,14 +27,14 @@ let particles = []
 
 function setup() {
   createCanvas(800, 400)
-  colorMode(HSB, 360, 100, 100)
+  colorMode(HSB, 360, 100, 100, 100)  // 4ème plage = alpha 0-100
   for (let i = 0; i < 50; i++) {
-    particles.push(new Particle(random(width), random(height), random(1)))  // random() disponible ici
+    particles.push(new Particle(random(width), random(height), random(1), random(1)))  // random() disponible ici
   }
 }
 
 function draw() {
-  background(240, 30, 10)
+  background(240, 30, 10, 25)  // efface partiellement — laisse une trace
   noStroke()
   for (let i = 0; i < particles.length; i++) {
     particles[i].update()
