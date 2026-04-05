@@ -40,20 +40,13 @@ function setup() {
   createCanvas(800, 400)
   colorMode(HSB, 360, 100, 100, 100)
 
-  const pente = (17.5 - 35.4) / (2030 - 2015)
   const data = Object.values(donnees)
 
   for (let i = 0; i < data.length; i++) {
     const d = data[i]
-    let ecart
-    if (d.year >= 2015) {
-      const paris = 35.4 + pente * (d.year - 2015)
-      ecart = constrain((d.gt - paris) / paris, 0, 1)
-    } else {
-      const suivant = data[i + 1]
-      const variation = suivant ? (suivant.gt - d.gt) / d.gt : 0
-      ecart = constrain(map(variation, -0.05, 0.05, 0, 1), 0, 1)
-    }
+    const precedent = data[i - 1]
+    const variation = precedent ? (d.gt - precedent.gt) / precedent.gt : 0
+    const ecart = constrain(map(variation, -0.05, 0.05, 0, 1), 0, 1)  // vert→rouge
     particles.push(new Particle(ecart, d.year))
   }
 }
